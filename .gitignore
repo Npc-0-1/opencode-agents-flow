@@ -1,0 +1,7 @@
+.env
+.env.*
+auth.json
+profile.local.md
+memory.local.md
+main-memory.local.md
+skills/daily-memory/memories/

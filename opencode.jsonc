@@ -1,0 +1,23 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "snapshot": false,
+  "default_agent": "auto-flash",
+  // 开源配置不得提交真实 API key；建议使用环境变量或 opencode auth 管理。
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "skills": {
+    "paths": [
+      "~/.config/opencode/skills"
+    ]
+  },
+  "agent": {
+    "plan": {
+      "disable": true
+    }
+  },
+  "mcp": {
+  },
+  "provider": {
+  }
+}
