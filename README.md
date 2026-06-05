@@ -275,8 +275,6 @@ Provider/auth/model/API key work is high risk. Real API keys must not be committ
 
 ### Required Skills
 
-`customize-opencode` may be built in by opencode. A missing repository directory for that skill is normal.
-
 | Skill | Use when | Safety note |
 | --- | --- | --- |
 | `customize-opencode` | opencode config, `AGENTS.md`, plugins, MCP, permission schema | Restart opencode after config-time changes. |
@@ -306,12 +304,6 @@ Provider/auth/model/API key work is high risk. Real API keys must not be committ
 - GitHub mutation requires explicit confirmation and must not operate on `.git`.
 - Deployment and production/service operations require explicit confirmation.
 - `memory` and `daily-memory` are privacy-sensitive and must stay separated.
-
-Memory privacy note:
-
-- Public memory files should contain templates and privacy prompts only.
-- Real profile, technical memory, and daily-memory content must stay in local private configuration.
-- Runtime daily-memory data must not be committed.
 
 ### Safety Boundaries
 
@@ -390,8 +382,6 @@ On Windows, copy the same files into the opencode configuration directory under 
   "provider": {}
 }
 ```
-
-Add provider settings locally as needed. Do not commit real API keys.
 
 #### 4. Restart opencode
 
@@ -633,8 +623,6 @@ provider/auth/model/API key 属于高风险边界。不要提交或发布真实 
 
 ### 必要 Skills
 
-`customize-opencode` 可能由 opencode 内置。仓库中没有对应目录是正常情况。
-
 | Skill | 使用场景 | 安全说明 |
 | --- | --- | --- |
 | `customize-opencode` | opencode 配置、`AGENTS.md`、plugins、MCP、权限 schema | 修改配置加载期文件后需要重启 opencode。 |
@@ -664,12 +652,6 @@ provider/auth/model/API key 属于高风险边界。不要提交或发布真实 
 - GitHub 写操作需要明确确认，且不得操作 `.git`。
 - 部署和生产/服务操作需要明确确认。
 - `memory` 和 `daily-memory` 都是隐私敏感能力，必须分开使用。
-
-记忆隐私提示：
-
-- 公开 memory 文件应只包含模板和隐私提示。
-- 真实 profile、技术记忆和 daily-memory 内容只能保留在本地私有配置中。
-- daily-memory 运行期数据不要提交。
 
 ### 安全边界
 
@@ -748,8 +730,6 @@ Windows 下复制到当前用户的 opencode 配置目录即可。
   "provider": {}
 }
 ```
-
-按需在本地加入 provider 配置。不要提交真实 API key。
 
 #### 4. 重启 opencode
 
