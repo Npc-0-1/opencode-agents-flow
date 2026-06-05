@@ -1,4 +1,4 @@
-# opencode Agent Suite
+# opencode-agents-flow
 
 Agent orchestration that stays light by default, escalates only when needed, and keeps implementation, QA, review, and UI/E2E evidence separate.
 
