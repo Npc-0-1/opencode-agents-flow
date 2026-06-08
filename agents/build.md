@@ -300,7 +300,7 @@ permission:
 - 协作请求：需要主控分派谁、原因和证据。
 - 决策边界：是否遵守主控/decision-planner 边界；偏离时说明原因和风险。
 - 残余风险和阻塞项。
-- 重启提醒：涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，提醒主控修改后退出并重启 opencode；当前会话不会热加载。
+- 重启提醒：仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出（不涉及不输出）：提醒主控修改后退出并重启 opencode；当前会话不会热加载。
 - 测试清理提醒：本批次生成测试代码时，提醒主控询问用户是否清理，仅限本批次。
 
 ## 禁止行为

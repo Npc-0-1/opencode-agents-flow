@@ -195,7 +195,7 @@ permission:
 - 结论：PASS / FAIL / BLOCKED / NOT_COVERED。
 - 未覆盖项：原因、风险和需要主控补充的条件。
 - 协作请求：需要主控分派谁、原因、证据和期望输入。
-- 重启提醒：涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，提醒主控修改后退出并重启 opencode；当前会话不会热加载。
+- 重启提醒：仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出（不涉及不输出）：提醒主控修改后退出并重启 opencode；当前会话不会热加载。
 
 ## 禁止行为
 
@@ -214,4 +214,5 @@ permission:
 
 ## 重启提醒
 
+仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时，本块才输出（不涉及则本块省略）：
 本 agent 文件被修改后，主控需退出并重启 opencode；当前会话不会热加载新规则。

@@ -12,14 +12,14 @@ description: Use when adding, deleting, renaming, or modifying custom model prov
 | `~/.config/opencode/opencode.jsonc` | provider 定义（SDK、baseURL、models、options） |
 | `~/.local/share/opencode/auth.json` | provider 的 API key（通用安全建议） |
 
-不要提交真实 API key；优先使用环境变量、文件引用或 opencode auth 管理凭证。报告中不要输出具体 key。
+当前个人配置按 AGENTS.md 允许 `provider.*.options.apiKey` 明文保存；除非用户明确要求，不主动迁移、不作为风险项、不输出具体 key。通用场景仍建议优先使用环境变量、文件引用或 auth.json 管理凭证。
 
 ## 高风险门禁
 
 - 读取配置、定位 provider/auth/model/API key 问题、排查模型不可用等只读操作可自动进行。
 - 写入、删除、重命名、迁移 provider、key、auth、model、default model 或 variants 前，必须取得用户明确授权。
 - 不得输出、复述、记录完整 API key；涉及 key 时只描述位置、引用方式或是否存在。
-- 不要提交真实 API key；优先使用环境变量、文件引用或 opencode auth 管理凭证。
+- 当前个人配置允许 `provider.*.options.apiKey` 明文保存；除非用户明确要求，不主动迁移。
 
 ---
 
@@ -27,7 +27,7 @@ description: Use when adding, deleting, renaming, or modifying custom model prov
 
 ### 1. 选 SDK（npm 包）
 
-按实际 provider 文档决定 `npm`。除非用户明确要求，不主动补 npm；只有 provider 实际不显示、模型不可用或 SDK 选择错误时，再检查 npm 包是否正确。
+按当前个人配置和实际 provider 文档决定 `npm`。除非用户明确要求，不主动补 npm；只有 provider 实际不显示、模型不可用或 SDK 选择错误时，再检查 npm 包是否正确。
 
 如果同一个 provider 下需要不同 SDK，可以**按模型覆盖 npm**：
 
@@ -86,7 +86,7 @@ description: Use when adding, deleting, renaming, or modifying custom model prov
 | 字段 | 必需 | 说明 |
 |------|:----:|------|
 | `name` | 否 | UI 显示名，与 key 一致即可 |
-| `npm` | 否 | AI SDK 包，按 provider 文档配置 |
+| `npm` | 否 | AI SDK 包，按当前个人配置和 provider 文档配置 |
 | `options.baseURL` | 是 | API 端点 URL |
 | `options.apiKey` | 否 | API key。支持 `{env:VAR}` 引用环境变量、`{file:path}` 引用文件 |
 | `options.headers` | 否 | 自定义请求头，每个请求都带上 |
@@ -272,7 +272,7 @@ provider 定义和 key 都保留，但 `/models` 中不显示。移除数组元�
   不是配置问题，是 API key 套餐不支持该模型。换模型或升级套餐。
 
 - **Provider 不出现**
-  默认不主动补 npm；只有 provider 实际不显示、模型不可用或 SDK 选择错误时，再检查 npm 包是否正确、baseURL 是否正确、auth.json 中 key 存在且 id 匹配。
+  当前个人配置不主动补 npm；只有 provider 实际不显示、模型不可用或 SDK 选择错误时，再检查 npm 包是否正确、baseURL 是否正确、auth.json 中 key 存在且 id 匹配。
 
 - **重命名后不可用**
   检查 `disabled_providers` 是否还引用了旧名。

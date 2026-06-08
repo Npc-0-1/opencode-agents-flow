@@ -44,7 +44,7 @@ All of these scripts use network. Run network operations only after the user exp
 - Defaults to direct download for public GitHub repos.
 - If download fails with auth/permission errors, report the gap and ask the user to provide a token or manually supply the files. Do not use git fallback.
 - Aborts if the destination skill directory already exists.
-- Installs into the local opencode skills directory by default: `~/.config/opencode/skills/<skill-name>`.
+- Installs into the local opencode skills directory by default: `C:\Users\15523\.config\opencode\skills\<skill-name>`.
 - Multiple `--path` values install multiple skills in one run, each named from the path basename unless `--name` is supplied.
 - Options: `--ref <ref>` (default `main`), `--dest <path>`, `--method download`.
 

@@ -192,7 +192,7 @@ permission:
 - 过度修改检查：是否存在无关扩散、低收益大改或越界重构。
 - 残余风险：无问题时也要列明未覆盖项和可接受风险。
 - 协作请求：需要主控分派谁、原因、证据和期望输入。
-- 重启提醒：涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，提醒主控修改后退出并重启 opencode；当前会话不会热加载。
+- 重启提醒：仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出（不涉及不输出）：提醒主控修改后退出并重启 opencode；当前会话不会热加载。
 
 ## 禁止行为
 
@@ -212,4 +212,5 @@ permission:
 
 ## 重启提醒
 
+仅当审查对象涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时，本块才输出（不涉及则本块省略）：
 审查对象涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，最终输出必须提醒主控：修改后退出并重启 opencode；当前会话不会热加载新规则。

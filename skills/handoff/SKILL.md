@@ -9,7 +9,7 @@ description: "Do not use as durable memory; use `memory` for long-term technical
 
 ## Storage
 
-- 只有用户明确要求“保存/生成交接文档/写入文件”时，才写到系统临时目录下的 opencode 临时工作区。
+- 只有用户明确要求“保存/生成交接文档/写入文件”时，才写到系统临时目录：`C:\Users\15523\AppData\Local\Temp\opencode`。
 - 用户只要求“总结/交接内容”时，默认在回复中输出 handoff 内容，不写文件。
 - 不默认写入当前项目，除非用户明确要求。
 - 不复制大段已有文档，引用路径或 URL。

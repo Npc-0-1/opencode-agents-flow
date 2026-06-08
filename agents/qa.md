@@ -316,7 +316,7 @@ permission:
 - 未覆盖项：原因、风险和需要主控补充的条件。
 - 临时产物：缓存、日志、截图、覆盖率、报告路径、用途和清理建议。
 - 下一步建议：给主控，不直接改代码。
-- 重启提醒：涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，提醒主控修改后退出并重启 opencode；当前会话不会热加载。
+- 重启提醒：仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出（不涉及不输出）：提醒主控修改后退出并重启 opencode；当前会话不会热加载。
 
 ## 禁止行为
 

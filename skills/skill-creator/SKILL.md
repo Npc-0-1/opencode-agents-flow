@@ -17,7 +17,7 @@ This skill provides guidance for creating effective skills.
 - Keep `SKILL.md` lean. Move long variants, templates, or detailed references into `references/` and link them from `SKILL.md`.
 - Add scripts only for deterministic, repeated, or fragile operations. Do not add scripts for one-off prose workflows.
 - Do not import upstream skills verbatim when local rules conflict; adapt them to local permissions, user style, and existing agents.
-- Default local opencode skill path is `~/.config/opencode/skills`; use this before other runtime-specific paths unless the user asks otherwise.
+- Default local opencode skill path is `C:\Users\15523\.config\opencode\skills`; use this before other runtime-specific paths unless the user asks otherwise.
 - Strong manual mode: if the user did not clearly authorize file changes, provide exact snippets, locations, and reasons instead of editing.
 - Strong auto mode: if the user asks to handle it end-to-end, modify files directly and validate before reporting.
 - Before final output, re-check duplicate skills, folder/name match, frontmatter validity, trigger clarity, path correctness, and local permission conflicts.
@@ -254,7 +254,7 @@ For example, when building an image-editor skill, relevant questions include:
 - "Can you give some examples of how this skill would be used?"
 - "I can imagine users asking for things like 'Remove the red-eye from this image' or 'Rotate this image'. Are there other ways you imagine this skill being used?"
 - "What would a user say that should trigger this skill?"
-- "Where should I create this skill? If you do not have a preference, I will place it in `~/.config/opencode/skills` so opencode can discover it automatically."
+- "Where should I create this skill? If you do not have a preference, I will place it in `C:\Users\15523\.config\opencode\skills` so opencode can discover it automatically."
 
 To avoid overwhelming users, avoid asking too many questions in a single message. Start with the most important questions and follow up as needed for better effectiveness.
 
@@ -290,7 +290,7 @@ At this point, it is time to actually create the skill.
 
 Skip this step only if the skill being developed already exists. In this case, continue to the next step.
 
-Before running `init_skill.py`, ask where the user wants the skill created. If they do not specify a location, default to `~/.config/opencode/skills` so opencode can discover it automatically.
+Before running `init_skill.py`, ask where the user wants the skill created. If they do not specify a location, default to `C:\Users\15523\.config\opencode\skills` so opencode can discover it automatically.
 
 When creating a new skill from scratch, always run the `init_skill.py` script. The script conveniently generates a new template skill directory that automatically includes everything a skill requires, making the skill creation process much more efficient and reliable.
 
@@ -303,8 +303,8 @@ scripts/init_skill.py <skill-name> --path <output-directory> [--resources script
 Examples:
 
 ```bash
-scripts/init_skill.py my-skill --path "~/.config/opencode/skills"
-scripts/init_skill.py my-skill --path "~/.config/opencode/skills" --resources scripts,references
+scripts/init_skill.py my-skill --path "C:\Users\15523\.config\opencode\skills"
+scripts/init_skill.py my-skill --path "C:\Users\15523\.config\opencode\skills" --resources scripts,references
 scripts/init_skill.py my-skill --path ~/work/skills --resources scripts --examples
 ```
 

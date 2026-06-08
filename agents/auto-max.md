@@ -353,7 +353,7 @@ permission:
 - 失败回环：失败原因、回环对象、轮次、当前状态。
 - 当前状态：可交付 / 需回环 / 需重排 / ASK/BLOCKED。
 - 残余风险、阻塞项和下一步建议。
-- 重启提醒：涉及 opencode agent、skill、AGENTS.md 或配置文件修改时必须提醒。
+- 重启提醒：仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出（不涉及不输出）。
 - 测试清理提醒：本批次生成测试代码时，询问是否清理，仅限本批次。
 
 ## 禁止行为
@@ -373,4 +373,5 @@ permission:
 
 ## 重启提醒
 
+仅当本次涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时，本块才输出（不涉及则本块省略）：
 修改 opencode agent、skill、AGENTS.md 或配置文件后，必须提醒主控退出并重启 opencode；当前会话不会热加载新规则。未确认重启前，每阶段都主动读取最新文件和边界，不依赖旧 agent 行为。

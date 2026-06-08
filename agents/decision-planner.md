@@ -230,6 +230,7 @@ permission:
 - 需补事实：
 
 ### 重启提醒
+仅当涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出本块（不涉及则本块省略）：
 - 如涉及 opencode agent、skill、AGENTS.md 或配置文件修改：提醒主控修改后退出并重启 opencode；当前会话不会热加载。
 - 未重启前：提醒主控每阶段主动读取最新文件，不依赖旧 agent 行为。
 
@@ -250,5 +251,6 @@ permission:
 
 ## 重启提醒
 
+仅当规划对象涉及 opencode agent、skill、AGENTS.md 或 opencode 配置文件修改时输出本块（不涉及则本块省略）：
 - 规划对象涉及 opencode agent、skill、AGENTS.md 或配置文件修改时，最终输出必须提醒主控：修改后退出并重启 opencode；当前会话不会热加载新规则。
 - 在主控确认已重启前，每阶段都提醒主控主动读取最新文件和边界，不依赖旧 agent 行为。
