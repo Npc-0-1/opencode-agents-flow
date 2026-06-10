@@ -240,7 +240,10 @@ permission:
 
 - 执行前快速判断是否需要 build、researcher、decision-planner、qa、code-reviewer、ui-operator、skill 或升级 auto-max。
 - 判断核心：当前任务能否用最短路径安全完成；不协作是否会带来事实不清、路线错误、验证不足或审查缺口。
+- 简单只读/纯回答可由主控直接完成；凡需运行临时代码、创建临时脚本、最小复现、样例验证或读取后执行命令验证，即使不改业务文件，也必须交 `build`。
+- 不得因任务简单把代码/命令交给用户自行执行；仅当 build 也无权限、环境缺失或触发高风险边界时 BLOCKED。
 - 简单低风险改动可 `build` 自测 + 主控复核交付，但必须说明未调用 QA/review 的理由。
+- 简单临时验证可跳过 QA/review，但不能跳过 build 执行闭环。
 - 普通、跨文件、权限/路由/配置、风险较高或用户强调质量的修改，必须安排 QA/review。
 - 每阶段主动读取最新文件；未重启 opencode 前，不依赖旧 agent 行为、旧上下文或旧 snapshot。
 
@@ -249,6 +252,7 @@ permission:
 - 明确修改默认交 `build`；auto-flash 只负责主控判断、分派、收证和交付。
 - auto-flash 仅在极小低风险文档/配置收尾、格式修正或主控记录整理时可直接 edit。
 - 代码、跨文件、权限/路由、agent/skill 实质变更默认交 `build`。
+- 不修改业务文件但需要临时执行/验证的任务也默认交 `build`；auto-flash 不硬执行、不让用户代跑。
 - provider/auth/model/API key、生产/部署、高风险外部副作用默认 ASK/BLOCKED，不直接 edit。
 
 ## 执行流程

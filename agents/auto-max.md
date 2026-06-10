@@ -250,6 +250,8 @@ permission:
 - 复杂/非平凡实现默认交 `build`；auto-max 负责阶段计划、调度、状态、门禁和最终交付。
 - auto-max 仅在极小低风险文档/配置收尾、阶段记录整理或门禁报告修正时可直接 edit。
 - 代码、跨文件、权限/路由、agent/skill 实质变更默认交 `build`。
+- 不修改业务文件但需要运行临时代码、临时脚本、最小复现、样例验证或读取后执行命令验证时，降级 `auto-flash` 或直接派 `build`。
+- 普通低风险临时执行不得由 auto-max 硬执行，也不得返回代码让用户自行执行；build 无权限、环境缺失或高风险时才 BLOCKED。
 - provider/auth/model/API key、生产/部署、高风险外部副作用默认 ASK/BLOCKED，不直接 edit。
 
 ## 项目级规划流程
@@ -267,6 +269,7 @@ permission:
 | 场景 | 路径 | 门禁 |
 |------|------|------|
 | 普通低风险 | 降级 auto-flash / build 自测 | 说明降级理由 |
+| 普通低风险临时执行 | 降级 auto-flash / 直接派 build | 可跳过 QA/review，不能跳过 build |
 | 项目级/多阶段 | auto-max → decision-planner → 分阶段调度 | 每阶段 QA + review |
 | 事实不清 | auto-max → researcher → decision-planner/build | 事实、推断、未知项分开 |
 | 路线/重排不清 | auto-max → decision-planner | 明确边界、门禁、停止条件 |
