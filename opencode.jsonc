@@ -16,6 +16,30 @@
       "disable": true
     }
   },
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "cmd": "deny", "cmd *": "deny", "cmd.exe": "deny", "cmd.exe *": "deny",
+      "powershell": "deny", "powershell *": "deny", "powershell.exe": "deny", "powershell.exe *": "deny",
+      "pwsh": "deny", "pwsh *": "deny", "pwsh.exe": "deny", "pwsh.exe *": "deny",
+      "bash": "deny", "bash *": "deny", "bash.exe": "deny", "bash.exe *": "deny",
+      "sh": "deny", "sh *": "deny", "sh.exe": "deny", "sh.exe *": "deny",
+      "python -c *": "deny", "python.exe -c *": "deny",
+      "node -e *": "deny", "node.exe -e *": "deny",
+      "Invoke-Expression *": "deny", "iex *": "deny", "Start-Process *": "deny", "saps *": "deny",
+      "git *": "deny", "git.exe *": "deny",
+      "rm *": "deny", "del *": "deny", "erase *": "deny", "rmdir *": "deny", "rd *": "deny",
+      "Remove-Item *": "deny", "ri *": "deny", "Rename-Item *": "deny", "ren *": "deny",
+      "shutdown *": "deny", "Format-Volume *": "deny",
+      "Stop-Computer *": "deny", "Restart-Computer *": "deny",
+      "*;*": "deny", "*&&*": "deny", "*||*": "deny", "*&*": "deny", "*|*": "deny",
+      "*>*": "deny", "* > *": "deny", "*>>*": "deny", "* >> *": "deny",
+      "*$(*": "deny", "*`*": "deny",
+      "*--fix": "deny", "*--fix *": "deny", "*--fix=*": "deny", "*--write*": "deny",
+      "*--snapshot-update*": "deny", "*--update-snapshots*": "deny",
+      "*--updateSnapshot*": "deny", "ruff format*": "deny", "*lint:fix*": "deny"
+    }
+},
   "mcp": {
   },
   "provider": {

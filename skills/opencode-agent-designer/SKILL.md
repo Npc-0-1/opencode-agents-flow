@@ -11,6 +11,8 @@ description: Use when creating, modifying, auditing, organizing, or evaluating o
 
 本 skill 只处理 opencode agent 文件本身，不接管主控编排，不替代实际执行、验证或审查 agent。
 
+`AGENTS.md` 是 agent/skill 路由、权限边界和质量门禁的权威源；本 skill 只提供 agent 设计/审计方法，不覆盖 AGENTS.md 的最新门禁。
+
 ## 适用范围
 
 - 新建 opencode agent：定义名称、description、mode、职责、权限、工作流、输入输出、停止条件和验证要求。
@@ -73,7 +75,7 @@ description: Use when creating, modifying, auditing, organizing, or evaluating o
 
 治理顺序：先全量理解现有 agents、skills、AGENTS 约束和路由关系；再建立矩阵；再做改动收益门禁；通过后才派 build 做最小修改；修改后必须 QA/review 回归并提醒重启 opencode。
 
-微小、低风险、局部文案修正可用轻量检查清单；涉及职责、权限、mode、路由、协作、门禁、主控链或高风险边界时，必须走完整治理蓝图。
+低风险局部文案修正可用轻量检查清单；涉及职责、权限、mode、路由、协作、门禁、主控链或高风险边界时，必须走完整治理蓝图。除 L0 例外外，正式 agent 文件修改或新建必须保留 QA/review 门禁。
 
 全局不变量：
 
@@ -182,7 +184,7 @@ description: Use when creating, modifying, auditing, organizing, or evaluating o
 
 ## 协作链
 
-- auto-flash：轻量主控。处理中低复杂度任务，默认委托 `build`，按风险调用 `decision-planner`、`qa`、`code-reviewer`、`ui-operator`。
+- auto-flash：轻量主控。处理中低复杂度任务，默认委托 `build`；轻量不等于降低门禁，除 L0 例外外，正式文件修改或新建仍必须 `build` → `qa` → `code-reviewer` → 主控交付。
 - auto-max：项目级主控。复杂任务先规划，再分派 researcher/build/qa/code-reviewer/ui-operator，阶段交付必须有门禁。
 - decision-planner：只读规划。负责路线、边界、风险和阶段重排，不写代码，不替代主控交付。
 - researcher：只读事实定位。负责搜索、读取、调用链和证据，不做最终决策。
@@ -190,6 +192,7 @@ description: Use when creating, modifying, auditing, organizing, or evaluating o
 - qa：独立验证。负责测试、构建、复现和证据，不修代码。
 - code-reviewer：独立审查。负责需求匹配、回归风险、测试缺口和过度修改检查，不修代码。
 - ui-operator：UI/E2E 专项验证。只在 UI 交互、视觉、浏览器路径风险明确时介入。
+- reflector：失败反思 subagent。连续失败、同类错误、多 agent 结论冲突或用户指出重复错误时，由主控调用；只读输出临时 `context_injection`；不写、不验证、不审查、不规划、不调度、不持久化；不替代 researcher/decision-planner/qa/code-reviewer/build/ui-operator。
 
 写 agent 时必须明确：上游是谁、下游是谁、可调用谁、不可调用谁、失败交给谁、最终向谁报告。
 
@@ -206,17 +209,18 @@ description: Use when creating, modifying, auditing, organizing, or evaluating o
 
 ## 质量门禁
 
-- L0 结构门禁：frontmatter 存在，name 与文件/目录一致，description 边界清楚，正文无互相冲突规则。
-- L1 路由门禁：适用范围、不适用范围、agent-skill 路由和相邻 agent 边界一致。
-- L2 权限门禁：权限与职责匹配，只读/规划/QA/审查不写文件，执行型 agent 有明确禁止项。
-- L3 协作门禁：auto-flash/auto-max、decision-planner、build、QA、code-reviewer 的调用关系清晰，无多主控竞争。
-- L4 运行门禁：修改后读取全文自检；必要时检查配置格式或加载规则，但不运行 git。
+- L0 例外：仅限纯回答、只读分析、版本/路径查询、用户明确极小 demo 或临时样例且不进入正式交付；可不进入 QA/review。
+- L1 正式小改：单文件、小范围 agent 调整，必须 `build` → 轻量 QA → 轻量 code-reviewer → 主控交付；聚焦 frontmatter、description、路由摘要、Markdown 结构和明显回归风险。
+- L2 正式修改：跨文件、配置/路由、权限、协作链或关键调用关系修改，必须 `build` → 标准 QA → 标准 code-reviewer → 主控交付；覆盖 AGENTS.md、一致性、相邻 agent 边界和回归路径。
+- L3 专项/复杂修改：agent 体系整编、复杂多阶段、UI/E2E、部署、训练或真实运行路径风险，升级 `auto-max`，拆分专项 QA/UI/E2E 或其他专项验证，并保留 code-reviewer 审查。
+
+agent 文件自身检查项：frontmatter 存在，name 与文件/目录一致，description 边界清楚，权限与职责匹配，auto-flash/auto-max、decision-planner、build、QA、code-reviewer 调用关系清晰，正文无互相冲突规则。
 
 门禁触发规则：
 
-- 明确小改：build 自测加反查清单即可。
-- 普通跨文件或影响路由的修改：需要 QA 或 code-reviewer 独立检查。
-- auto-max 阶段交付、agent 体系整编、非平凡权限变化：必须 QA + code-reviewer。
+- AGENTS.md 是最终准绳；本 skill 中任何方法性建议不得放宽 AGENTS.md 的 L0-L3 门禁。
+- 除 L0 例外外，任何正式 agent 文件修改或新建必须 `build` → `qa` → `code-reviewer` → 主控交付；build 自测只作为执行侧证据。
+- L1 使用轻量 QA/review，L2 使用标准 QA/review，L3 由 `auto-max` 拆分专项 QA/UI/E2E 或其他专项验证。
 - 涉及高风险边界：进入 ASK/BLOCKED，不在 agent 文件中绕过确认。
 - 修改 opencode agent 文件后，最终提醒用户退出并重启 opencode；当前会话不会热加载新配置。
 

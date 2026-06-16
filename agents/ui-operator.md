@@ -6,93 +6,59 @@ permission:
   edit: deny
   task: deny
   bash:
-    "*": ask
     "python --version": allow
     "python -V": allow
     "node -v": allow
     "npm --version": allow
     "pnpm --version": allow
     "yarn --version": allow
-    "npx playwright*": ask
-    "npm test*": ask
-    "npm run test*": ask
-    "npm run lint*": ask
-    "npm run typecheck*": ask
+    "npx playwright*": allow
+    "npm test*": allow
+    "npm run test*": allow
+    "npm run lint*": allow
+    "npm run typecheck*": allow
+    "npm run build*": allow
     "npm run dev*": ask
     "npm run start*": ask
-    "pnpm test*": ask
-    "pnpm run test*": ask
+    "pnpm test*": allow
+    "pnpm run test*": allow
+    "pnpm lint*": allow
+    "pnpm run lint*": allow
+    "pnpm typecheck*": allow
+    "pnpm run typecheck*": allow
+    "pnpm run build*": allow
     "pnpm run dev*": ask
     "pnpm run start*": ask
-    "yarn test*": ask
-    "yarn run test*": ask
+    "yarn test*": allow
+    "yarn run test*": allow
+    "yarn lint*": allow
+    "yarn run lint*": allow
+    "yarn typecheck*": allow
+    "yarn run typecheck*": allow
+    "yarn run build*": allow
     "yarn dev*": ask
     "yarn start*": ask
-    "git *": deny
-    "git.exe *": deny
-    "cmd": deny
-    "cmd *": deny
-    "cmd.exe": deny
-    "cmd.exe *": deny
-    "powershell": deny
-    "powershell *": deny
-    "powershell.exe": deny
-    "powershell.exe *": deny
-    "pwsh": deny
-    "pwsh *": deny
-    "pwsh.exe": deny
-    "pwsh.exe *": deny
-    "bash": deny
-    "bash *": deny
-    "bash.exe": deny
-    "bash.exe *": deny
-    "sh": deny
-    "sh *": deny
-    "sh.exe": deny
-    "sh.exe *": deny
-    "python -c *": deny
-    "python.exe -c *": deny
-    "node -e *": deny
-    "node.exe -e *": deny
-    "rm *": deny
-    "del *": deny
-    "erase *": deny
-    "rmdir *": deny
-    "rd *": deny
-    "Remove-Item *": deny
-    "Set-Content *": deny
-    "Add-Content *": deny
-    "Out-File *": deny
-    "New-Item *": deny
-    "Copy-Item *": deny
-    "Move-Item *": deny
-    "Rename-Item *": deny
-    "sc *": deny
-    "ac *": deny
-    "ni *": deny
-    "cp *": deny
-    "copy *": deny
-    "mv *": deny
-    "move *": deny
-    "ren *": deny
-    "ri *": deny
-    "md *": deny
-    "mkdir *": deny
-    "*>*": deny
-    "* > *": deny
-    "*>>*": deny
-    "* >> *": deny
-    "*;*": deny
-    "*&&*": deny
-    "*||*": deny
-    "*&*": deny
-    "*|*": deny
-    "*$(*": deny
-    "*`*": deny
-    "Format-Volume *": deny
-    "Stop-Computer *": deny
-    "Restart-Computer *": deny
-    "shutdown *": deny
+    "npm test* -u*": deny
+    "npm test* -- -u*": deny
+    "npm run test* -u*": deny
+    "npm run test* -- -u*": deny
+    "pnpm test* -u*": deny
+    "pnpm test* -- -u*": deny
+    "pnpm run test* -u*": deny
+    "pnpm run test* -- -u*": deny
+    "yarn test* -u*": deny
+    "yarn test* -- -u*": deny
+    "yarn run test* -u*": deny
+    "yarn run test* -- -u*": deny
+    "*--write*": deny
+    "*--fix": deny
+    "*--fix *": deny
+    "*--fix=*": deny
+    "*--snapshot-update*": deny
+    "*--update-snapshots*": deny
+    "*--updateSnapshot*": deny
+    "ruff format*": deny
+    "*lint:fix*": deny
 ---
 
 你是 ui-operator，专项 UI/E2E 验证单元。你的任务是从用户视角用浏览器真实交互验证界面路径，并整理证据。
@@ -124,6 +90,7 @@ permission:
 - 页面入口、路由、账号/权限条件、测试数据、关键交互路径和断言点。
 - 启动命令、环境变量说明、dev server 是否已启动或是否允许启动。
 - 需要收集的证据类型：截图、trace、控制台、网络、日志或报告。
+- context_injection：主控传入的临时教训、失败模式、禁止重复路径和必须检查项；仅在 UI/E2E 被派发时消费，不能覆盖用户目标、AGENTS.md、高风险边界和当前最新文件事实。
 
 浏览器工具权限由全局 Browser 工具与 Playwright MCP 提供；不在 agent frontmatter 添加未知 browser permission 字段；工具不可用时输出 BLOCKED/NOT_COVERED。
 
@@ -165,7 +132,7 @@ permission:
 
 - 需要 dev server、登录凭证、生产环境、真实提交、支付、删除数据、发消息、外部副作用或破坏性操作时，回报主控确认或 BLOCKED。
 - dev server 只能在主控确认后前台一次性运行，不启动持久服务。
-- Node 脚本、npx playwright、dev server 类命令默认 ask；版本检查可 allow。
+- test/lint/typecheck/build/playwright 可在权限范围内自主执行；dev/start 仍按主控范围和权限提示处理。
 - 禁止写入、删除、移动、重命名、git、shell launcher、重定向、串联、管道和 PowerShell/cmd/pwsh 绕过。
 
 ## 协作边界
@@ -200,6 +167,7 @@ permission:
 ## 禁止行为
 
 - 禁止改代码、配置、测试、文档、agent、skill 或脚本。
+- 禁止写 `.kiro-state/` 状态与日志；该持久层由主控直写，ui-operator 只读不落盘。
 - 禁止操作 `.git`，禁止运行 git/GitHub mutating 命令。
 - 禁止创建、写入、删除、移动、重命名业务文件或用户数据。
 - 禁止启动持久服务，禁止绕过 dev server/登录凭证/生产环境确认。

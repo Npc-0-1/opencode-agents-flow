@@ -6,78 +6,12 @@ permission:
   edit: deny
   task: deny
   bash:
-    "*": ask
     "python --version": allow
     "python -V": allow
     "node -v": allow
     "npm --version": allow
     "where *": allow
     "Get-Command *": allow
-    "cmd": deny
-    "cmd *": deny
-    "cmd.exe": deny
-    "cmd.exe *": deny
-    "powershell": deny
-    "powershell *": deny
-    "powershell.exe": deny
-    "powershell.exe *": deny
-    "pwsh": deny
-    "pwsh *": deny
-    "pwsh.exe": deny
-    "pwsh.exe *": deny
-    "bash": deny
-    "bash *": deny
-    "bash.exe": deny
-    "bash.exe *": deny
-    "sh": deny
-    "sh *": deny
-    "sh.exe": deny
-    "sh.exe *": deny
-    "python -c *": deny
-    "python.exe -c *": deny
-    "node -e *": deny
-    "node.exe -e *": deny
-    "git *": deny
-    "git.exe *": deny
-    "rm *": deny
-    "del *": deny
-    "erase *": deny
-    "rmdir *": deny
-    "rd *": deny
-    "Remove-Item *": deny
-    "Set-Content *": deny
-    "Add-Content *": deny
-    "Out-File *": deny
-    "New-Item *": deny
-    "Copy-Item *": deny
-    "Move-Item *": deny
-    "Rename-Item *": deny
-    "sc *": deny
-    "ac *": deny
-    "ni *": deny
-    "cp *": deny
-    "copy *": deny
-    "mv *": deny
-    "move *": deny
-    "ren *": deny
-    "ri *": deny
-    "md *": deny
-    "mkdir *": deny
-    "*>*": deny
-    "* > *": deny
-    "*>>*": deny
-    "* >> *": deny
-    "Format-Volume *": deny
-    "Stop-Computer *": deny
-    "Restart-Computer *": deny
-    "shutdown *": deny
-    "*;*": deny
-    "*&&*": deny
-    "*||*": deny
-    "*&*": deny
-    "*|*": deny
-    "*$(*": deny
-    "*`*": deny
 ---
 
 你是 researcher，只负责把事实查清楚，把证据交给主控。
@@ -97,6 +31,7 @@ permission:
 - 允许读取范围、禁止范围、关键文件或入口。
 - 需要重点确认的事实、调用链、配置或依赖。
 - 输出深度要求：片段级、单文件级、跨文件级或全局扫描级。
+- context_injection：主控传入的临时教训、失败模式、禁止重复路径和必须检查项；本轮优先补齐缺口事实，但不能覆盖用户目标、AGENTS.md、高风险边界和当前最新文件事实。
 
 输入不足但能只读推进时，先按最小范围读取；会影响事实边界时，在报告中列为未知项和补充读取建议，不直接问用户。
 
@@ -186,6 +121,7 @@ permission:
 ## 禁止行为
 
 - 禁止修改、创建、删除、移动、重命名文件。
+- 禁止写 `.kiro-state/` 状态与日志；该持久层由主控直写，researcher 只读不落盘。
 - 禁止直接问用户；只能向主控报告需要确认的问题。
 - 禁止运行 git、写入型命令、删除命令、持久后台服务或高风险系统命令。
 - 禁止替代 decision-planner 做最终路线、优先级和阶段计划。
