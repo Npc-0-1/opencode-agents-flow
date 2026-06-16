@@ -33,6 +33,7 @@ auto-flash  -- clear + bounded --> build --> self-check --> delivery
    +-- independent review ------> code-reviewer
    +-- real UI/E2E -------------> ui-operator
    +-- complex/high-risk -------> auto-max
+   +-- repeated failures -------> reflector
 
 auto-max --> plan --> research --> build --> qa --> review --> optional UI/E2E --> gated delivery
 ```
@@ -90,6 +91,7 @@ agents/
   qa.md
   code-reviewer.md
   ui-operator.md
+  reflector.md
 skills/
   <skill-name>/SKILL.md
 ```
@@ -108,6 +110,7 @@ Specialist layer
   qa: independent validation
   code-reviewer: independent review
   ui-operator: real UI/E2E operation
+  reflector: read-only failure reflection
 
 Skill layer
   Loaded only when the task object matches the skill domain
@@ -134,6 +137,7 @@ Core principles:
 | `qa` | Independent validation unit | PASS / FAIL / BLOCKED / NOT_COVERED with command or evidence |
 | `code-reviewer` | Independent risk review unit | Requirement fit, regression risk, edge cases, safety, test gaps |
 | `ui-operator` | Real UI/E2E operator | Browser path, screenshot, console/network, or E2E evidence |
+| `reflector` | Read-only failure reflection on repeated failures or repeated error types | Temporary context_injection (max 3 items, not persisted, does not reset loop count) |
 
 ### Task Flow
 
@@ -156,6 +160,7 @@ auto-flash: classify goal, scope, risk, and missing facts
   +-- independent risk review needed --------------> code-reviewer
   +-- real UI/browser/E2E evidence needed ---------> ui-operator
   +-- complex/high-risk/multi-stage/blocked -------> auto-max
+  +-- repeated failures / same errors -------------> reflector
 ```
 
 The default path is intentionally small: `auto-flash -> build -> self-check -> delivery`. Specialist agents are used only when they add necessary evidence, planning, review, or UI/E2E coverage.
@@ -219,6 +224,7 @@ State ledger entries should stay compact: goal, scope, forbidden scope, active p
 | Need requirement, regression, edge-case, safety, or over-modification review | `code-reviewer` | Review risk without editing files. |
 | Need browser interaction, screenshot, real UI path, or E2E | `ui-operator` | Collect real UI/E2E evidence. |
 | Complex, high-risk, multi-stage, repeated failure, or gate-heavy work | `auto-max` | Coordinate phases, specialists, QA/review, and replanning. |
+| Repeated failures, repeated error types, or agent conclusion conflicts | `reflector` | Produce temporary context_injection without resetting the loop count. |
 
 ### Review and QA Model
 
@@ -235,8 +241,9 @@ Failure handling:
 
 1. Classify the failure: fact gap, route error, implementation defect, validation environment, review risk, UI/E2E behavior, requirement conflict, or high-risk boundary.
 2. Route it to the role that can resolve it.
-3. Retry from the current file state only; do not roll back to snapshots.
-4. Stop after three failed repair/validation loops and report evidence, blockers, residual risk, and recommended next owner.
+3. On repeated failures, invoke `reflector` for temporary `context_injection` before retrying; `reflector` does not reset the loop count.
+4. Retry from the current file state only; do not roll back to snapshots.
+5. Stop after three failed repair/validation loops and report evidence, blockers, residual risk, and recommended next owner.
 
 ### Delivery Report
 
@@ -418,6 +425,7 @@ auto-flash  -- 明确 + 有边界 --> build --> 自检 --> 交付
    +-- 独立审查 -------------> code-reviewer
    +-- 真实 UI/E2E ---------> ui-operator
    +-- 复杂/高风险 ----------> auto-max
+   +-- 反复失败 -------------> reflector
 
 auto-max --> 规划 --> 调研 --> 实现 --> QA --> 审查 --> 可选 UI/E2E --> 门禁交付
 ```
@@ -438,6 +446,7 @@ agents/
   qa.md
   code-reviewer.md
   ui-operator.md
+  reflector.md
 skills/
   <skill-name>/SKILL.md
 ```
@@ -456,6 +465,7 @@ skills/
   qa：独立验证
   code-reviewer：独立审查
   ui-operator：真实 UI/E2E 操作
+  reflector：只读失败反思
 
 Skill 层
   仅在任务对象匹配 skill 领域时加载
@@ -482,6 +492,7 @@ Skill 层
 | `qa` | 独立验证单元 | 带命令或证据的 PASS / FAIL / BLOCKED / NOT_COVERED |
 | `code-reviewer` | 独立风险审查单元 | 需求匹配、回归风险、边界、安全、测试缺口 |
 | `ui-operator` | 真实 UI/E2E 操作单元 | 浏览器路径、截图、console/network 或 E2E 证据 |
+| `reflector` | 连续失败或重复错误时的只读失败反思单元 | 临时 context_injection（最多 3 条，不持久化，不重置失败轮次） |
 
 ### 任务流程
 
@@ -504,6 +515,7 @@ auto-flash：判断目标、范围、风险和事实缺口
   +-- 需要独立风险审查 ----------------------------> code-reviewer
   +-- 需要真实 UI/浏览器/E2E 证据 -----------------> ui-operator
   +-- 复杂/高风险/多阶段/阻塞 ---------------------> auto-max
+  +-- 反复失败 / 同类错误 -----------------------> reflector
 ```
 
 默认路径刻意保持轻量：`auto-flash -> build -> 自检 -> 交付`。只有需要必要证据、规划、审查或 UI/E2E 覆盖时，才使用专项 agent。
@@ -567,6 +579,7 @@ code-reviewer：独立审查需求和回归风险
 | 需要需求、回归、边界、安全或过度修改审查 | `code-reviewer` | 只读审查风险。 |
 | 需要浏览器交互、截图、真实 UI 路径或 E2E | `ui-operator` | 收集真实 UI/E2E 证据。 |
 | 复杂、高风险、多阶段、反复失败或重门禁任务 | `auto-max` | 统筹阶段、专项 agent、QA/review 和重排。 |
+| 反复失败、同类错误或多 agent 结论冲突 | `reflector` | 输出临时 context_injection，不重置失败轮次。 |
 
 ### 审查与 QA 模型
 
@@ -583,8 +596,9 @@ code-reviewer：独立审查需求和回归风险
 
 1. 分类失败：事实缺口、路线错误、实现缺陷、验证环境、审查风险、UI/E2E 行为、需求冲突或高风险边界。
 2. 回流给能解决问题的角色。
-3. 只基于当前文件状态重试，不回滚 snapshot。
-4. 三轮修复/验证失败后停止，报告证据、阻塞、残余风险和建议接手对象。
+3. 反复失败时先调用 `reflector` 输出临时 `context_injection` 再重试；`reflector` 不重置失败轮次。
+4. 只基于当前文件状态重试，不回滚 snapshot。
+5. 三轮修复/验证失败后停止，报告证据、阻塞、残余风险和建议接手对象。
 
 ### 交付报告
 
