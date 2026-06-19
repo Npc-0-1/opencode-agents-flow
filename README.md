@@ -1,23 +1,60 @@
 # opencode-agents-flow
 
-Agent orchestration that stays light by default, escalates only when needed, and keeps implementation, QA, review, and UI/E2E evidence separate.
+An opencode agents/skills/rules suite that stays light by default, escalates only when needed, and keeps implementation, QA, review, and UI/E2E evidence separate. State is split across decision (in-context), progress (TodoWrite), and persistence (`.kiro-state/`), with the controller as the single writer.
 
 ## English
 
 ### Highlights
 
-- Lightweight default controller: `auto-flash` chooses the shortest reliable path for clear tasks.
-- Complex-work escalation: `auto-max` takes sole control for multi-stage, high-risk, or blocked work.
-- Single-controller discipline: one task has one controller; no competing orchestration.
-- `build` is the only implementation unit; it reads current files, edits minimally, and self-verifies.
-- `qa` validates independently; `code-reviewer` reviews independently.
-- `ui-operator` handles real browser/UI/E2E paths when explicitly required.
-- Skills trigger by task object, not by context length or general complexity.
-- High-risk boundaries are explicit: `.git`, provider/auth/model/API keys, production, deployment, plugins/MCP, destructive data operations, and GitHub mutation.
+- Lightweight by default: `auto-flash` picks the shortest reliable path; `auto-max` takes sole control for complex/high-risk/multi-stage work.
+- Role separation: `build` is the only execution unit; `qa` / `code-reviewer` / `ui-operator` are independent and never replace each other.
+- Three-layer state: Long Task State (decision, in-context) + TodoWrite (progress, in-session) + `.kiro-state/` (persistence, on-disk, project-scoped).
+- Single-writer state machine: only the controller writes `.kiro-state/`; subagents return evidence and let the controller persist.
+- Disk is truth, state is navigation: file mtime is a soft signal; the actual file content on disk is the only ground truth.
+- Qualitative failure loop: rerouting requires repeated `failure_type` / route / assumption with no substantial progress, not a fixed loop count.
+- Milestone-amortized validation: `build` self-check (L0/L1) advances within a milestone; `qa` + `code-reviewer` run in batch at milestone boundaries — amortization, not gate downgrade.
+- Layered write authority: controller may Write/Edit `.kiro-state/` directly; all business files still go through `build` → `qa` → `code-reviewer` → controller delivery.
 
-### Why this exists
+## Table of Contents
 
-Most agent setups fail in one of two ways: simple tasks become heavy process, or complex tasks get patched by a single loop with no independent evidence. This suite keeps the fast path fast while making escalation, validation, review, and safety boundaries explicit.
+- [English](#english)
+  - [Highlights](#highlights)
+  - [Comparison with mainstream multi-agent frameworks](#comparison-with-mainstream-multi-agent-frameworks)
+  - [At a glance](#at-a-glance)
+  - [Repository layout](#repository-layout)
+  - [Agent roles](#agent-roles)
+  - [Three-layer state](#three-layer-state)
+  - [.kiro-state/ subsystem](#kiro-state-subsystem)
+  - [Failure loop](#failure-loop)
+  - [Progress vs risk](#progress-vs-risk)
+  - [Skills](#skills)
+  - [Safety boundaries](#safety-boundaries)
+  - [Quality gates](#quality-gates)
+  - [Usage](#usage)
+- [中文](#中文)
+  - [亮点](#亮点)
+  - [与主流多 agent 框架的差异](#与主流多-agent-框架的差异)
+  - [一眼看懂](#一眼看懂)
+  - [仓库结构](#仓库结构)
+  - [Agent 角色](#agent-角色)
+  - [三层状态](#三层状态)
+  - [.kiro-state/ 子系统](#kiro-state-子系统)
+  - [失败回环](#失败回环)
+  - [进度风险二分](#进度风险二分)
+  - [Skills](#skills-1)
+  - [安全边界](#安全边界)
+  - [质量门禁](#质量门禁)
+  - [使用方法](#使用方法)
+
+### Comparison with mainstream multi-agent frameworks
+
+| Dimension | LangGraph / AutoGen / CrewAI etc. | flow |
+| --- | --- | --- |
+| Default path | Full graph / round-robin / sequential pipeline | Shortest reliable path; escalate only when needed |
+| Validation independence | Tool calls inside the same loop | `qa` / `code-reviewer` hold independent frontmatter permissions; never reuse `build` conclusions |
+| Failure handling | Retry policy / chat-loop | Qualitative `failure_type` + `reflector` `context_injection` (max 3) |
+| State persistence | Whole-graph checkpoint / chat history | Three-layer split (decision + progress + `.kiro-state/`) with single-writer controller |
+| Audit trail | Runtime logs | Plain-text snapshot + append-only log under `.kiro-state/` |
 
 ### At a glance
 
@@ -32,328 +69,106 @@ auto-flash  -- clear + bounded --> build --> self-check --> delivery
    +-- independent validation --> qa
    +-- independent review ------> code-reviewer
    +-- real UI/E2E -------------> ui-operator
-   +-- complex/high-risk -------> auto-max
+   +-- complex/high-risk -------> auto-max (ownership transfer)
    +-- repeated failures -------> reflector
 
 auto-max --> plan --> research --> build --> qa --> review --> optional UI/E2E --> gated delivery
 ```
 
-## Table of Contents
+L0 exceptions only: pure answers, read-only analysis, version/path queries, explicit tiny demos. Otherwise **every formal file change goes through `build` → `qa` → `code-reviewer` → controller delivery**.
 
-- [English](#english)
-  - [Highlights](#highlights)
-  - [Why this exists](#why-this-exists)
-  - [At a glance](#at-a-glance)
-  - [Architecture](#architecture)
-  - [Agent Roles](#agent-roles)
-  - [Task Flow](#task-flow)
-  - [Auto-Max Project Flow](#auto-max-project-flow)
-  - [Routing Decision](#routing-decision)
-  - [Review and QA Model](#review-and-qa-model)
-  - [Delivery Report](#delivery-report)
-  - [Skills](#skills)
-  - [Required Skills](#required-skills)
-  - [Skill Routing Notes](#skill-routing-notes)
-  - [Safety Boundaries](#safety-boundaries)
-  - [Quality Gates](#quality-gates)
-  - [Usage](#usage)
-- [中文](#中文)
-  - [亮点](#亮点)
-  - [为什么存在](#为什么存在)
-  - [一眼看懂](#一眼看懂)
-  - [架构](#架构)
-  - [Agent 角色](#agent-角色)
-  - [任务流程](#任务流程)
-  - [Auto-Max 项目级流程](#auto-max-项目级流程)
-  - [路由判断](#路由判断)
-  - [审查与 QA 模型](#审查与-qa-模型)
-  - [交付报告](#交付报告)
-  - [Skills](#skills-1)
-  - [必要 Skills](#必要-skills)
-  - [Skill 路由说明](#skill-路由说明)
-  - [安全边界](#安全边界)
-  - [质量门禁](#质量门禁)
-  - [使用方法](#使用方法)
-
-### Architecture
-
-Repository layout:
+### Repository layout
 
 ```text
-opencode.jsonc
-AGENTS.md
-agents/
-  auto-flash.md
-  auto-max.md
-  build.md
-  decision-planner.md
-  researcher.md
-  qa.md
-  code-reviewer.md
-  ui-operator.md
-  reflector.md
-skills/
-  <skill-name>/SKILL.md
+opencode.jsonc           # Engine permission matrix
+AGENTS.md                # Trunk rules (single file, includes skill routing and state subsystem)
+agents/*.md              # 9 agents: auto-flash / auto-max / build / decision-planner /
+                         #           researcher / qa / code-reviewer / ui-operator / reflector
+skills/*/SKILL.md        # Domain skills
+.kiro-state/             # Per-project runtime state, generated under user projects (not shipped with this repo)
 ```
 
-Control model:
+### Agent roles
 
-```text
-Controller layer
-  auto-flash: default lightweight controller
-  auto-max: project-level controller for complex work
-
-Specialist layer
-  build: implementation
-  researcher: read-only facts
-  decision-planner: read-only planning
-  qa: independent validation
-  code-reviewer: independent review
-  ui-operator: real UI/E2E operation
-  reflector: read-only failure reflection
-
-Skill layer
-  Loaded only when the task object matches the skill domain
-```
-
-Core principles:
-
-- One controller per task.
-- Simple tasks stay lightweight.
-- Complex tasks escalate instead of being patched blindly.
-- Implementation, validation, review, planning, research, and UI operation stay separate.
-- Agents read current files before editing, validating, or reviewing.
-- Delivery is evidence-based, not assertion-based.
-
-### Agent Roles
-
-| Agent | Role | Output |
+| Agent | Role | Verdict vocabulary |
 | --- | --- | --- |
-| `auto-flash` | Default lightweight controller for clear low/medium-complexity tasks | Route, delegation, compact final delivery |
-| `auto-max` | Sole project controller for complex, multi-stage, high-risk, or blocked work | Phase plan, state ledger, gates, final delivery |
-| `build` | Only execution unit for code, config, script, agent, skill, test, and doc changes | Minimal change plus focused self-verification |
-| `decision-planner` | Read-only route, boundary, priority, phase, and validation advisor | Execution boundary, stop condition, gate recommendation |
-| `researcher` | Read-only fact finder for files, config, dependencies, call chains, and evidence | Current facts with source references |
-| `qa` | Independent validation unit | PASS / FAIL / BLOCKED / NOT_COVERED with command or evidence |
-| `code-reviewer` | Independent risk review unit | Requirement fit, regression risk, edge cases, safety, test gaps |
-| `ui-operator` | Real UI/E2E operator | Browser path, screenshot, console/network, or E2E evidence |
-| `reflector` | Read-only failure reflection on repeated failures or repeated error types | Temporary context_injection (max 3 items, not persisted, does not reset loop count) |
+| `auto-flash` | Default lightweight controller | Route, dispatch, compact delivery |
+| `auto-max` | Project-level orchestration controller | Phase plan, state, gates, final delivery |
+| `build` | Only execution unit | `PASS / FAIL / BLOCKED / NOT_COVERED` |
+| `decision-planner` | Read-only planning advisor | Boundary, stop conditions, gate suggestions |
+| `researcher` | Read-only fact finder | Sourced current facts |
+| `qa` | Independent validation | `PASS / FAIL / BLOCKED / NOT_COVERED` |
+| `code-reviewer` | Independent risk review | `PASS / LIMITED_PASS / NEEDS_FIX / BLOCKED` |
+| `ui-operator` | Real UI/E2E | Browser path, screenshots, console/network |
+| `reflector` | Failure reflection (bash all-deny) | Up to 3 `context_injection`, not persisted |
 
-### Task Flow
+Only `auto-flash` / `auto-max` are controllers. Every other agent has `task: deny`, preventing lateral scheduling. Verdict vocabularies are not interchangeable.
 
-`auto-flash` is the default entry. It keeps the path short unless the task itself requires escalation.
+### Three-layer state
 
-```text
-User task
-  |
-  v
-auto-flash: classify goal, scope, risk, and missing facts
-  |
-  +-- clear + bounded -----------------------------> build
-  |                                                   |
-  |                                                   v
-  |                                           delivery summary
-  |
-  +-- missing facts -------------------------------> researcher
-  +-- route/scope/priority unclear ----------------> decision-planner
-  +-- independent validation needed ---------------> qa
-  +-- independent risk review needed --------------> code-reviewer
-  +-- real UI/browser/E2E evidence needed ---------> ui-operator
-  +-- complex/high-risk/multi-stage/blocked -------> auto-max
-  +-- repeated failures / same errors -------------> reflector
-```
+Long tasks separate decision, progress, and persistence. Each layer has a distinct owner, reader, and lifecycle.
 
-The default path is intentionally small: `auto-flash -> build -> self-check -> delivery`. Specialist agents are used only when they add necessary evidence, planning, review, or UI/E2E coverage.
-
-### Auto-Max Project Flow
-
-`auto-max` is used when one lightweight loop would hide risk: broad scope, multiple dependent phases, high-risk operations, unclear success criteria, repeated failures, or a delivery gate requiring independent QA/review.
-
-```text
-auto-flash detects escalation signal
-  |
-  v
-auto-max takes sole controller ownership
-  |
-  v
-decision-planner: phases, boundaries, gates, stop conditions
-  |
-  v
-researcher: current facts, call chains, dependencies, config evidence
-  |
-  v
-build: minimal implementation for the approved phase
-  |
-  v
-qa: independent validation when required
-  |
-  v
-code-reviewer: independent requirement and regression review
-  |
-  +-- UI/E2E required --> ui-operator: real browser evidence
-  |
-  v
-phase gate: pass, replan, route failure, or stop
-  |
-  v
-final delivery: changes, reads, validation, review, blockers, residual risk
-```
-
-| Phase | Owner | Gate |
-| --- | --- | --- |
-| Escalation | `auto-flash` -> `auto-max` | `auto-max` accepts sole control and records why escalation is needed. |
-| Plan | `decision-planner` | Scope, success criteria, allowed changes, validation level, and stop conditions are executable. |
-| Research | `researcher` | Missing facts are resolved or reported as blockers. |
-| Build | `build` | Latest files were read; only approved files changed. |
-| Validate | `qa` | Required validation is independently covered or honestly marked NOT_COVERED / BLOCKED. |
-| Review | `code-reviewer` | Blocking requirement, regression, safety, or over-modification risks are routed. |
-| UI/E2E | `ui-operator` | Required browser/UI/E2E evidence is captured or blocked with reason. |
-| Deliver | `auto-max` | All gates are closed or residual risk is explicit. |
-
-State ledger entries should stay compact: goal, scope, forbidden scope, active phase, owner, files read, files changed, commands, artifacts, decisions, assumptions, blockers, failed loop count, and residual NOT_COVERED items.
-
-### Routing Decision
-
-| Signal | Route | Purpose |
-| --- | --- | --- |
-| Clear target, narrow scope, low/medium risk | `auto-flash -> build` | Apply the smallest correct change and verify it. |
-| Missing file, dependency, config, call-chain, or evidence facts | `researcher` | Read and report facts without modifying files. |
-| Unclear scope, route, priority, phase boundary, or stop condition | `decision-planner` | Define a safe execution boundary. |
-| Code/config/script/agent/skill/test/doc change | `build` | Implement inside the approved boundary. |
-| Need independent test/build/typecheck/static evidence | `qa` | Validate without reusing `build` conclusions. |
-| Need requirement, regression, edge-case, safety, or over-modification review | `code-reviewer` | Review risk without editing files. |
-| Need browser interaction, screenshot, real UI path, or E2E | `ui-operator` | Collect real UI/E2E evidence. |
-| Complex, high-risk, multi-stage, repeated failure, or gate-heavy work | `auto-max` | Coordinate phases, specialists, QA/review, and replanning. |
-| Repeated failures, repeated error types, or agent conclusion conflicts | `reflector` | Produce temporary context_injection without resetting the loop count. |
-
-### Review and QA Model
-
-`build` self-check is necessary but not sufficient for non-trivial risk. It proves the implementation loop is not obviously broken; it does not replace independent validation or review.
-
-| Layer | Owner | Checks | Output |
+| Layer | Owner | Content | Lifecycle |
 | --- | --- | --- | --- |
-| Implementation self-check | `build` | Latest-file reads, minimal diff, references, syntax/static structure, focused validation | PASS / FAIL / BLOCKED / NOT_COVERED |
-| Independent validation | `qa` | Tests, build, typecheck, reproduction, integration path, or requested validation level | Evidence-based PASS / FAIL / BLOCKED / NOT_COVERED |
-| Independent review | `code-reviewer` | Requirement fit, regression risk, edge cases, test gaps, safety/data risk, over-modification | Blocking and non-blocking findings |
-| UI/E2E evidence | `ui-operator` | Real page path, browser actions, screenshots, console/network when relevant | UI/E2E result and artifacts |
+| Decision (Long Task State) | Controller injects into subagent prompt | `objective`, `completion_definition`, `non_negotiables`, `allowed_scope`, `forbidden_scope`, `current_phase`, `quality_gates`, `done`, `not_covered`, `blocked`, `next_action` | In-context only |
+| Progress (TodoWrite) | Controller holds and drives | Hierarchical todo tree with status `pending` / `in_progress` / `completed` / `cancelled` | In-session only |
+| Persistence (`.kiro-state/`) | Controller-only, via Write/Edit tools | Snapshot fields + append-only log; `INDEX.md` + `tasks/<id>.md` | On-disk, project-scoped |
 
-Failure handling:
+Subagents run as independent sessions and cannot see TodoWrite. They consume the injected Long Task State, return evidence, and let the controller persist. After any new session or context compaction, the controller re-reads current files; the disk is the source of truth.
 
-1. Classify the failure: fact gap, route error, implementation defect, validation environment, review risk, UI/E2E behavior, requirement conflict, or high-risk boundary.
-2. Route it to the role that can resolve it.
-3. On repeated failures, invoke `reflector` for temporary `context_injection` before retrying; `reflector` does not reset the loop count.
-4. Retry from the current file state only; do not roll back to snapshots.
-5. Stop after three failed repair/validation loops and report evidence, blockers, residual risk, and recommended next owner.
+### .kiro-state/ subsystem
 
-### Delivery Report
+`.kiro-state/` is the persistence layer for long-task state and processing log. Project-scoped, naturally isolated, travels with the repository.
 
-Final delivery should be compact and auditable:
+- Location: `<workdir>/.kiro-state/`. `INDEX.md` indexes all tasks (one row per task, scanned once at session start to locate `active` tasks). Each `tasks/<id>.md` has a snapshot region (overwritable) and an append-only log region.
+- Flush triggers: milestone boundaries, before high-risk operations, and on substantive state change. Each flush also appends one log entry.
+- Write implementation: Write/Edit tools only. Bash redirection is forbidden because it bypasses permission audit. Append uses "Read existing → append → Write overwrite".
+- Direct-write authority: only `auto-flash` / `auto-max` write `.kiro-state/`, and only for state and log files. This is the single exemption from the `build` → `qa` → `code-reviewer` chain. Business files (code, config, agent, skill, formal docs) still go through the chain.
+- Legacy projects: a project without `.kiro-state/` is fine. Recovery degrades silently and does not raise errors.
 
-- Changed files: file, operation, purpose.
-- Latest reads: files, ranges, dependencies, call paths, or artifacts checked before editing/reviewing.
-- Change summary: what each change solves and whether scope stayed minimal.
-- Validation record: level, command or method, output summary, PASS / FAIL / BLOCKED / NOT_COVERED.
-- Review record: QA/review/UI evidence when used, or why it was not covered.
-- Failure loop: failed attempts, fixes, current state, remaining blockers.
-- Boundaries: confirmation that scope, safety rules, and high-risk limits were respected.
-- Residual risk: what remains unverified and who should handle it next if needed.
+### Failure loop
+
+Classified by `failure_type` (transient / logic / route / fact gap / requirement conflict / high-risk boundary) and routed accordingly. Whether to reroute depends on substantial progress, not a fixed count:
+
+```text
+progress_made = whether this round produced (new fact ∪ scope reduction ∪ excluded route ∪ new testable hypothesis)
+```
+
+A different angle producing real movement keeps going; the same approach repeating in place triggers `reflector` → `decision-planner` reroute. `context_injection` is capped at 3 items, scoped to the current task, never persisted, and never overrides the user goal / `AGENTS.md` / current file facts / high-risk boundaries. Failure records are written into `.kiro-state` `failure_record` (`failure_type` / attempted rounds / excluded routes) to prevent cross-session repetition.
+
+### Progress vs risk
+
+Ask only on risk, never on progress. Once goals and boundaries are clear, in-bounds advancement is fully automatic; passing a gate auto-advances. There is no task-level "max N steps"; self-continuation runs until `completion_definition` is met or a hard risk boundary is hit.
+
+Hard risk boundaries (immediate stop): irreversible operations, production changes, deletion of user data, privilege escalation, `provider/auth/model/API Key`, GitHub mutation, real requirement conflicts with no default, repeated failures still not converging after rerouting.
 
 ### Skills
 
-Skills are domain tools, not complexity badges. Load a skill only when the task object matches its trigger.
+Triggered by task object, not by context length or general complexity. Full routing table in `AGENTS.md` §6.
 
-Examples:
+- opencode self-governance: `customize-opencode` / `opencode-agent-designer` / `opencode-skill-designer` / `opencode-model-provider` / `skill-creator` / `skill-installer`
+- Engineering methodology: `design-grill` / `codebase-architecture` / `diagnose` / `tdd-workflow` / `prototype` / `handoff` / `memory` / `daily-memory`
+- NLP / data / deploy / GitHub: `nlp-modeling` / `data-processing` / `deploy-ops` / `gh-ops`
 
-- Editing opencode config, `AGENTS.md`, permissions, plugins, or MCP -> `customize-opencode`.
-- Creating or changing agent files -> `opencode-agent-designer`.
-- Governing the skills directory -> `opencode-skill-designer`.
-- Creating one skill -> `skill-creator`.
-- Installing a supplied skill -> `skill-installer`.
-- Unknown root cause or failing behavior -> `diagnose`.
-- Test-first known behavior -> `tdd-workflow`.
-- Raw CSV/Excel/JSONL/TXT or pandas data work -> `data-processing`.
-- BERT, text matching, Cross-Encoder, hard negatives, training/evaluation -> `nlp-modeling`.
-- Docker, services, logs, health checks, deployment/server ops -> `deploy-ops`.
-- GitHub platform objects -> `gh-ops`.
-- Long-term technical memory -> `memory`.
-- Non-technical daily-life memory -> `daily-memory`.
+### Safety boundaries
 
-Provider/auth/model/API key work is high risk. Real API keys must not be committed or published.
+- Never operate on `.git` (hard ban, zero exception).
+- Without confirmation: never delete/migrate user data; never roll back at the file level; never overwrite current files with old snapshots.
+- Without confirmation: never touch production, deployment, `provider/auth/model/API Key`, MCP/plugin high-risk changes, or GitHub mutating actions.
+- Never bypass permissions via shell launchers (`cmd / powershell / pwsh / bash / sh`), chained pipes, redirection, `python -c`, `node -e`, or `Invoke-Expression`.
+- Never run `--fix` / `--write` / `--snapshot-update` / format / golden / fixture-update commands unless explicitly allowed.
+- Never commit real API keys, private memory, secrets, or tokens.
 
-### Required Skills
+### Quality gates
 
-| Skill | Use when | Safety note |
-| --- | --- | --- |
-| `customize-opencode` | opencode config, `AGENTS.md`, plugins, MCP, permission schema | Restart opencode after config-time changes. |
-| `opencode-agent-designer` | Agent creation, modification, or audit | Not for provider/auth/model work. |
-| `opencode-skill-designer` | Skill directory scan, audit, registration, routing, overlap governance | Not for creating one specific skill. |
-| `opencode-model-provider` | Provider/auth/model/API key/capability/variant work | Requires explicit confirmation; never expose real keys. |
-| `skill-creator` | Create or update one skill | Avoid overlapping skills when narrowing works. |
-| `skill-installer` | Install a skill from a supplied repo/path/URL | Use download/API methods; do not operate on `.git`. |
-| `diagnose` | Unknown root cause, broken behavior, failing tests, exceptions, flaky failures | Reproduce and gather evidence before fixing. |
-| `tdd-workflow` | Test-first known behavior or red-green-refactor | Use `diagnose` first when root cause is unknown. |
-| `data-processing` | Raw data cleanup, conversion, sampling, splitting, labels, pandas | Treat user data as sensitive. |
-| `nlp-modeling` | NLP modeling, BERT, text matching, Cross-Encoder, training/evaluation | Do not use for raw table cleanup unless tied to training design. |
-| `codebase-architecture` | Existing architecture, module boundaries, coupling, refactor/testability analysis | Analysis does not authorize broad refactors. |
-| `design-grill` | Stress-test PRDs, plans, designs, feature ideas, vague requirements | Ask one key question at a time. |
-| `deploy-ops` | Docker, service logs, health checks, deployment config, server operations | Production/deployment changes require confirmation. |
-| `gh-ops` | GitHub issues, PRs, releases, triage, repository search | Mutating GitHub actions require confirmation; do not touch `.git`. |
-| `prototype` | Throwaway prototype, UI mock, state-machine sandbox, quick experiment | Not for production implementation. |
-| `handoff` | Compact current state for another agent or future session | Redact sensitive data; not durable memory. |
-| `memory` | Durable technical decisions, project state, preferences, confirmed root causes | Privacy-sensitive; store only valuable non-sensitive context. |
-| `daily-memory` | Non-technical daily notes, feelings, relationships, health, family | Privacy-sensitive; never use for code/project memory. |
+- L0: syntax, config format, frontmatter, Markdown structure, static readability.
+- L1: focused unit tests, lint, typecheck, minimal sample validation.
+- L2: functional path, key call chain, regression path.
+- L3: UI/E2E, training dry-run, deployment dry-run, service health check.
 
-### Skill Routing Notes
-
-- Skills trigger by task object and domain match, not by long context, general complexity, or automatic mode.
-- Complex work still needs the right task object: diagnosis, TDD, data, modeling, deployment, GitHub, architecture, design, prototype, handoff, memory, or daily memory.
-- Provider/auth/API key work requires explicit confirmation and must never publish real keys.
-- GitHub mutation requires explicit confirmation and must not operate on `.git`.
-- Deployment and production/service operations require explicit confirmation.
-- `memory` and `daily-memory` are privacy-sensitive and must stay separated.
-
-### Safety Boundaries
-
-The suite is conservative by default:
-
-- Do not operate on `.git`.
-- Do not delete, move, rename, or destructively migrate user data without explicit confirmation.
-- Do not perform file-level rollback or overwrite current files with old snapshots.
-- Do not start persistent background services.
-- Do not mutate production services, deployment state, provider/auth/model/API key settings, MCP/plugin high-risk settings, or GitHub objects without confirmation.
-- Do not run formatting, fix, snapshot, golden, fixture update, or write-producing validation commands unless explicitly allowed.
-- Do not commit real API keys, private memory, private daily-memory data, secrets, tokens, or local-only personal configuration.
-
-### Quality Gates
-
-Validation levels:
-
-- L0: syntax, imports, config format, frontmatter, Markdown structure, closed code blocks, anchor readability, and static readability.
-- L1: focused unit tests, lint, typecheck, or minimal script/sample validation.
-- L2: functional path, integration path, key call chain, data flow, or regression path validation.
-- L3: UI/E2E, training dry-run, deployment dry-run, service health check, or specialized validation.
-
-Failure loop:
-
-1. Classify the failure.
-2. Fix only within the approved boundary.
-3. Revalidate from current file state.
-4. Stop after three failed repair/validation loops and report evidence, blockers, residual risk, and recommended next owner.
+Except L0, every formal change goes through `build` → `qa` → `code-reviewer` → delivery. QA and code-reviewer must independently read current files and provide evidence; do not reuse `build` conclusions. Mark NOT_COVERED when uncovered; mark BLOCKED on missing environment/permission. **Never fake PASS.** Inside a milestone, `build` self-check (L0/L1) is enough to advance; at milestone boundaries `qa` + `code-reviewer` run in batch — this is amortization, not gate downgrade.
 
 ### Usage
-
-#### 1. Keep the expected layout
-
-```text
-opencode.jsonc
-AGENTS.md
-agents/
-  *.md
-skills/
-  */SKILL.md
-```
-
-#### 2. Copy into an opencode configuration directory
 
 ```bash
 mkdir -p ~/.config/opencode
@@ -363,53 +178,60 @@ cp -R agents ~/.config/opencode/agents
 cp -R skills ~/.config/opencode/skills
 ```
 
-On Windows, copy the same files into the opencode configuration directory under your user profile.
-
-#### 3. Minimal `opencode.jsonc`
+On Windows, copy into `%USERPROFILE%\.config\opencode\`. The block below is a minimal subset; the full deny matrix is in the repo root `opencode.jsonc`.
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "snapshot": false,
   "default_agent": "auto-flash",
-  "instructions": [
-    "AGENTS.md"
-  ],
-  "skills": {
-    "paths": [
-      "~/.config/opencode/skills"
-    ]
-  },
-  "agent": {
-    "plan": {
-      "disable": true
+  "instructions": ["AGENTS.md"],
+  "skills": { "paths": ["~/.config/opencode/skills"] },
+  "agent": { "plan": { "disable": true } },
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "cmd": "deny", "cmd.exe": "deny",
+      "powershell": "deny", "powershell.exe": "deny",
+      "pwsh": "deny", "bash": "deny", "sh": "deny",
+      "python -c *": "deny", "node -e *": "deny",
+      "Invoke-Expression *": "deny", "iex *": "deny",
+      "git *": "deny", "git.exe *": "deny",
+      "rm *": "deny", "del *": "deny", "Remove-Item *": "deny", "Rename-Item *": "deny",
+      "*;*": "deny", "*&&*": "deny", "*|*": "deny", "*>*": "deny",
+      "*$(*": "deny", "*`*": "deny",
+      "*--fix": "deny", "*--write*": "deny", "*--snapshot-update*": "deny", "ruff format*": "deny"
     }
-  },
-  "mcp": {},
-  "provider": {}
+  }
 }
 ```
 
-#### 4. Restart opencode
+The full version (all deny/ask/allow rules) is in the repo root. `agent.plan.disable=true` only disables the opencode built-in plan agent; it does not affect `decision-planner`.
 
-opencode loads config, agents, skills, and instructions at startup. After changing `opencode.jsonc`, `AGENTS.md`, files under `agents/`, or any `SKILL.md`, quit and restart opencode. Running sessions do not hot-reload these rules.
+After modifying `opencode.jsonc` / `AGENTS.md` / `agents/` / `SKILL.md`, **restart opencode**. Running sessions do not hot-reload.
 
 ## 中文
 
 ### 亮点
 
-- 默认轻量主控：`auto-flash` 为明确任务选择最短可靠路径。
-- 复杂任务升级：多阶段、高风险或阻塞任务由 `auto-max` 接管唯一主控权。
-- 单主控纪律：每轮任务只有一个主控，不并行争夺编排权。
-- `build` 是唯一执行单元：读取当前文件、最小修改、自检验证。
-- `qa` 独立验证；`code-reviewer` 独立审查。
-- `ui-operator` 只在明确需要时处理真实浏览器/UI/E2E 路径。
-- skills 按任务对象触发，不按上下文长度或笼统复杂度触发。
-- 高风险边界明确：`.git`、provider/auth/model/API key、生产、部署、plugins/MCP、破坏性数据操作和 GitHub 写操作。
+- 默认轻量：`auto-flash` 给明确任务选最短可靠路径；复杂、高风险、多阶段任务才升级 `auto-max` 接管唯一主控权。
+- 角色分离：`build` 是唯一执行单元；`qa` / `code-reviewer` / `ui-operator` 各自独立，不互相替代。
+- 三层状态：决策层 Long Task State（上下文注入）+ 进度层 TodoWrite（会话内）+ 持久层 `.kiro-state/`（落盘，跟项目走）。
+- 单写者状态机：只有主控写 `.kiro-state/`，子 agent 只回传证据，由主控持久化。
+- 磁盘是真相，状态是导航：mtime 只是软信号，磁盘文件实际内容才是判定依据。
+- 失败回环按质性判断：同类 `failure_type` / 路线 / 假设无实质进展才换路，不靠固定轮数。
+- 里程碑摊销验证：里程碑内 `build` 自测（L0/L1）即可推进，里程碑边界批量上 `qa` + `code-reviewer`——这是摊销，不是降门禁。
+- 写入分层：主控可用 Write/Edit 直写 `.kiro-state/`，业务文件仍走 `build` → `qa` → `code-reviewer` → 主控交付。
 
-### 为什么存在
+### 与主流多 agent 框架的差异
 
-多数 agent 配置容易走向两个极端：简单任务被重流程拖慢，复杂任务又被单轮局部补丁草率处理，缺少独立证据。本套配置让快路径保持快速，同时把升级、验证、审查和安全边界显式化。
+| 维度 | LangGraph / AutoGen / CrewAI 等 | flow |
+| --- | --- | --- |
+| 默认路径 | 全图 / 轮询 / 顺序流水线 | 最短可靠路径，复杂度升高才升级 |
+| 验证独立性 | 同一循环内的工具调用 | `qa` / `code-reviewer` 独立 frontmatter 权限，不复用 build 结论 |
+| 失败处理 | 重试策略 / chat-loop | 质性 `failure_type` + `reflector` 临时 `context_injection`（≤3 条） |
+| 状态持久化 | 整图 checkpoint / 聊天历史 | 三层分离（决策 + 进度 + `.kiro-state/`）+ 单写者主控 |
+| 审计轨迹 | 运行时日志 | `.kiro-state/` 下的纯文本快照 + 只追加日志 |
 
 ### 一眼看懂
 
@@ -424,291 +246,106 @@ auto-flash  -- 明确 + 有边界 --> build --> 自检 --> 交付
    +-- 独立验证 -------------> qa
    +-- 独立审查 -------------> code-reviewer
    +-- 真实 UI/E2E ---------> ui-operator
-   +-- 复杂/高风险 ----------> auto-max
+   +-- 复杂/高风险 ----------> auto-max（主控权移交）
    +-- 反复失败 -------------> reflector
 
 auto-max --> 规划 --> 调研 --> 实现 --> QA --> 审查 --> 可选 UI/E2E --> 门禁交付
 ```
 
-### 架构
+L0 例外仅限：纯回答、只读分析、版本/路径查询、用户明确极小 demo。除此之外，**任何正式文件修改必须 `build` → `qa` → `code-reviewer` → 主控交付**。
 
-仓库结构：
-
-```text
-opencode.jsonc
-AGENTS.md
-agents/
-  auto-flash.md
-  auto-max.md
-  build.md
-  decision-planner.md
-  researcher.md
-  qa.md
-  code-reviewer.md
-  ui-operator.md
-  reflector.md
-skills/
-  <skill-name>/SKILL.md
-```
-
-控制模型：
+### 仓库结构
 
 ```text
-主控层
-  auto-flash：默认轻量主控
-  auto-max：复杂任务的项目级主控
-
-专项层
-  build：实现
-  researcher：只读事实定位
-  decision-planner：只读规划
-  qa：独立验证
-  code-reviewer：独立审查
-  ui-operator：真实 UI/E2E 操作
-  reflector：只读失败反思
-
-Skill 层
-  仅在任务对象匹配 skill 领域时加载
+opencode.jsonc           # 引擎层权限矩阵
+AGENTS.md                # 主干规则（单文件，含 skill 路由与状态子系统）
+agents/*.md              # 9 个 agent：auto-flash / auto-max / build / decision-planner /
+                         #              researcher / qa / code-reviewer / ui-operator / reflector
+skills/*/SKILL.md        # 领域 skills
+.kiro-state/             # 项目运行时状态，在用户项目中生成（不随本仓库分发）
 ```
-
-核心原则：
-
-- 每轮任务只有一个主控。
-- 简单任务保持轻量。
-- 复杂任务升级，不盲目局部修补。
-- 实现、验证、审查、规划、调研和 UI 操作分离。
-- 修改、验证、审查前读取当前最新文件。
-- 交付基于证据，不靠口头断言。
 
 ### Agent 角色
 
-| Agent | 角色 | 输出 |
+| Agent | 角色 | 输出枚举 |
 | --- | --- | --- |
-| `auto-flash` | 明确中低复杂度任务的默认轻量主控 | 路由、分派、简洁最终交付 |
-| `auto-max` | 复杂、多阶段、高风险或阻塞任务的唯一项目级主控 | 阶段计划、状态记录、门禁、最终交付 |
-| `build` | 代码、配置、脚本、agent、skill、测试和文档修改的唯一执行单元 | 最小修改和聚焦自检 |
-| `decision-planner` | 只读路线、边界、优先级、阶段和验证参谋 | 执行边界、停止条件、门禁建议 |
-| `researcher` | 只读文件、配置、依赖、调用链和证据定位 | 带来源的当前事实 |
-| `qa` | 独立验证单元 | 带命令或证据的 PASS / FAIL / BLOCKED / NOT_COVERED |
-| `code-reviewer` | 独立风险审查单元 | 需求匹配、回归风险、边界、安全、测试缺口 |
-| `ui-operator` | 真实 UI/E2E 操作单元 | 浏览器路径、截图、console/network 或 E2E 证据 |
-| `reflector` | 连续失败或重复错误时的只读失败反思单元 | 临时 context_injection（最多 3 条，不持久化，不重置失败轮次） |
+| `auto-flash` | 默认轻量主控 | 路由、分派、简洁交付 |
+| `auto-max` | 项目级深度编排主控 | 阶段计划、状态、门禁、最终交付 |
+| `build` | 唯一执行单元 | `PASS / FAIL / BLOCKED / NOT_COVERED` |
+| `decision-planner` | 只读规划参谋 | 边界、停止条件、门禁建议 |
+| `researcher` | 只读事实定位 | 带来源的当前事实 |
+| `qa` | 独立验证 | `PASS / FAIL / BLOCKED / NOT_COVERED` |
+| `code-reviewer` | 独立风险审查 | `PASS / LIMITED_PASS / NEEDS_FIX / BLOCKED` |
+| `ui-operator` | 真实 UI/E2E | 浏览器路径、截图、console/network 证据 |
+| `reflector` | 失败反思（bash 全 deny） | ≤3 条临时 `context_injection`，不持久化 |
 
-### 任务流程
+主控只有 `auto-flash` / `auto-max`；其他 agent `task: deny` 锁死，不能横向调度。结论词表互不通用。
 
-`auto-flash` 是默认入口。除非任务本身需要升级，否则保持最短可靠路径。
+### 三层状态
 
-```text
-用户任务
-  |
-  v
-auto-flash：判断目标、范围、风险和事实缺口
-  |
-  +-- 目标明确 + 边界清晰 ------------------------> build
-  |                                                   |
-  |                                                   v
-  |                                               交付摘要
-  |
-  +-- 事实不足 ------------------------------------> researcher
-  +-- 路线/范围/优先级不清 ------------------------> decision-planner
-  +-- 需要独立验证 --------------------------------> qa
-  +-- 需要独立风险审查 ----------------------------> code-reviewer
-  +-- 需要真实 UI/浏览器/E2E 证据 -----------------> ui-operator
-  +-- 复杂/高风险/多阶段/阻塞 ---------------------> auto-max
-  +-- 反复失败 / 同类错误 -----------------------> reflector
-```
+长任务分离决策、进度和持久三层，三层不重复，各自有独立的写入者、读取者和生命周期。
 
-默认路径刻意保持轻量：`auto-flash -> build -> 自检 -> 交付`。只有需要必要证据、规划、审查或 UI/E2E 覆盖时，才使用专项 agent。
-
-### Auto-Max 项目级流程
-
-当单轮轻量闭环会掩盖风险时使用 `auto-max`：范围过宽、多个依赖阶段、高风险操作、成功标准不清、反复失败，或交付门禁要求独立 QA/review。
-
-```text
-auto-flash 发现升级信号
-  |
-  v
-auto-max 接管唯一主控权
-  |
-  v
-decision-planner：阶段、边界、门禁、停止条件
-  |
-  v
-researcher：当前事实、调用链、依赖、配置证据
-  |
-  v
-build：在批准阶段内做最小实现
-  |
-  v
-qa：按需独立验证
-  |
-  v
-code-reviewer：独立审查需求和回归风险
-  |
-  +-- 需要 UI/E2E --> ui-operator：真实浏览器证据
-  |
-  v
-阶段门禁：通过、重排、失败回流或停止
-  |
-  v
-最终交付：修改、读取、验证、审查、阻塞、残余风险
-```
-
-| 阶段 | 负责 | 门禁 |
-| --- | --- | --- |
-| 升级 | `auto-flash` -> `auto-max` | `auto-max` 接受唯一主控，并记录升级原因。 |
-| 规划 | `decision-planner` | 范围、成功标准、允许修改、验证层级和停止条件可执行。 |
-| 调研 | `researcher` | 事实缺口已补齐，或作为阻塞报告。 |
-| 实现 | `build` | 已读取最新文件，只修改批准文件。 |
-| 验证 | `qa` | 独立覆盖要求验证，或如实标记 NOT_COVERED / BLOCKED。 |
-| 审查 | `code-reviewer` | 阻塞性需求、回归、安全或过度修改风险已回流。 |
-| UI/E2E | `ui-operator` | 所需浏览器/UI/E2E 证据已捕获，或带原因阻塞。 |
-| 交付 | `auto-max` | 所有门禁关闭，或残余风险明确。 |
-
-状态记录保持简洁：目标、范围、禁止范围、当前阶段、负责角色、已读文件、已改文件、命令、产物、决策、假设、阻塞、失败轮次和残余 NOT_COVERED 项。
-
-### 路由判断
-
-| 信号 | 路由 | 目的 |
-| --- | --- | --- |
-| 目标明确、范围窄、中低风险 | `auto-flash -> build` | 做最小正确修改并验证。 |
-| 缺少文件、依赖、配置、调用链或证据事实 | `researcher` | 只读补事实，不改文件。 |
-| 范围、路线、优先级、阶段边界或停止条件不清 | `decision-planner` | 定义安全执行边界。 |
-| 代码/配置/脚本/agent/skill/测试/文档修改 | `build` | 在批准边界内实现。 |
-| 需要独立测试/构建/typecheck/静态证据 | `qa` | 不复用 `build` 结论，独立验证。 |
-| 需要需求、回归、边界、安全或过度修改审查 | `code-reviewer` | 只读审查风险。 |
-| 需要浏览器交互、截图、真实 UI 路径或 E2E | `ui-operator` | 收集真实 UI/E2E 证据。 |
-| 复杂、高风险、多阶段、反复失败或重门禁任务 | `auto-max` | 统筹阶段、专项 agent、QA/review 和重排。 |
-| 反复失败、同类错误或多 agent 结论冲突 | `reflector` | 输出临时 context_injection，不重置失败轮次。 |
-
-### 审查与 QA 模型
-
-`build` 自检是必要的，但不能覆盖非平凡风险。它只能证明实现闭环没有明显损坏，不能替代独立验证或审查。
-
-| 层级 | 负责 | 检查内容 | 输出 |
+| 层级 | 写入者 | 内容 | 生命周期 |
 | --- | --- | --- | --- |
-| 实现自检 | `build` | 最新文件读取、最小 diff、引用、语法/静态结构、聚焦验证 | PASS / FAIL / BLOCKED / NOT_COVERED |
-| 独立验证 | `qa` | 测试、构建、typecheck、复现、集成路径或指定验证层级 | 基于证据的 PASS / FAIL / BLOCKED / NOT_COVERED |
-| 独立审查 | `code-reviewer` | 需求匹配、回归风险、边界条件、测试缺口、安全/数据风险、过度修改 | 阻塞与非阻塞发现 |
-| UI/E2E 证据 | `ui-operator` | 真实页面路径、浏览器操作、截图、必要 console/network | UI/E2E 结果和产物 |
+| 决策层（Long Task State） | 主控注入子 agent prompt | `objective`、`completion_definition`、`non_negotiables`、`allowed_scope`、`forbidden_scope`、`current_phase`、`quality_gates`、`done`、`not_covered`、`blocked`、`next_action` | 仅在上下文 |
+| 进度层（TodoWrite） | 主控持有并驱动 | 分层 todo 树，状态 `pending` / `in_progress` / `completed` / `cancelled` | 仅在会话内 |
+| 持久层（`.kiro-state/`） | 仅主控通过 Write/Edit 工具写 | 快照字段 + 只追加日志；`INDEX.md` + `tasks/<id>.md` | 落盘，跟项目走 |
 
-失败处理：
+子 agent 是独立子会话，看不到 TodoWrite。它们消费注入的 Long Task State、回传证据，由主控负责持久化。任何新会话或上下文压缩后，主控按需读磁盘最新代码，以磁盘实际内容为准。
 
-1. 分类失败：事实缺口、路线错误、实现缺陷、验证环境、审查风险、UI/E2E 行为、需求冲突或高风险边界。
-2. 回流给能解决问题的角色。
-3. 反复失败时先调用 `reflector` 输出临时 `context_injection` 再重试；`reflector` 不重置失败轮次。
-4. 只基于当前文件状态重试，不回滚 snapshot。
-5. 三轮修复/验证失败后停止，报告证据、阻塞、残余风险和建议接手对象。
+### .kiro-state/ 子系统
 
-### 交付报告
+`.kiro-state/` 是长任务状态与处理日志的持久层，跟项目走，天然隔离。
 
-最终交付应简洁且可审计：
+- 位置：`<工作目录>/.kiro-state/`。`INDEX.md` 索引所有任务（一行一任务，会话开始时扫一次定位 `active` 任务）；每个 `tasks/<id>.md` = 快照区（可覆盖）+ 处理日志区（只追加）。
+- 刷盘时机：里程碑边界、重大风险操作前、状态实质变化时；每次刷盘同时追加一条日志。
+- 写实现：仅 Write/Edit 工具；禁止 bash 重定向（绕过权限审计）；日志追加用"Read 现有 → 追加 → Write 覆盖"。
+- 主控可直写豁免：仅 `auto-flash` / `auto-max` 直写 `.kiro-state/`，且仅限状态与日志文件。这是 `build` → `qa` → `code-reviewer` 链的唯一豁免；业务文件（代码、配置、agent、skill、正式文档）仍走完整链路。
+- 老项目兼容：项目无 `.kiro-state/` 时优雅空转，不报错。
 
-- 修改文件：文件、操作、目的。
-- 最新读取：修改/审查前读取的文件、范围、依赖、调用路径或产物。
-- 修改摘要：每个改动解决什么问题，是否保持最小范围。
-- 验证记录：层级、命令或方法、输出摘要、PASS / FAIL / BLOCKED / NOT_COVERED。
-- 审查记录：已使用的 QA/review/UI 证据，或未覆盖原因。
-- 失败回环：失败尝试、修复轮次、当前状态、剩余阻塞。
-- 边界说明：确认范围、安全规则和高风险边界已遵守。
-- 残余风险：仍未验证的内容，以及必要时建议谁接手。
+### 失败回环
+
+按 `failure_type` 分类（瞬态 / 逻辑 / 路线 / 事实缺口 / 需求冲突 / 高风险边界）路由到对应角色。是否换路看"有无实质进展"，不靠固定轮数：
+
+```text
+progress_made = 本轮是否带来 (新事实 ∪ 缩小范围 ∪ 排除错误路径 ∪ 新可检验假设)
+```
+
+只要不同思路真在推进就继续；只有重复同一套路且原地打转才触发 `reflector` → `decision-planner` 换路。`context_injection` ≤ 3 条，仅当前任务有效，不持久化，不能覆盖用户目标 / `AGENTS.md` / 当前文件事实 / 高风险边界。失败记录写入 `.kiro-state` 的 `failure_record` 字段（`failure_type` / 已试轮次 / 已排除路线），防跨会话重复踩坑。
+
+### 进度风险二分
+
+只在风险上问，不在进度上问。任务边界确定后，安全范围内推进动作全自动，过门禁即自动进下一节，禁止在进度上问"要不要继续"。任务级别无"最多 N 步"上限，自我续跑直到 `completion_definition` 满足或命中风险硬边界。
+
+风险硬边界（即时停问）：不可逆操作、生产变更、删除用户数据、权限越界、`provider/auth/model/API Key`、GitHub mutating、需求实质冲突且无默认方案、同类错误换路后仍不收敛。
 
 ### Skills
 
-Skills 是领域工具，不是复杂度标签。只有任务对象匹配触发条件时才加载。
+按任务对象触发，不按上下文长度或笼统复杂度触发。完整路由表见 `AGENTS.md` §6。
 
-示例：
-
-- 修改 opencode 配置、`AGENTS.md`、权限、plugins 或 MCP -> `customize-opencode`。
-- 创建或修改 agent 文件 -> `opencode-agent-designer`。
-- 治理 skills 目录 -> `opencode-skill-designer`。
-- 创建单个 skill -> `skill-creator`。
-- 安装给定 skill -> `skill-installer`。
-- 根因未知或行为失败 -> `diagnose`。
-- 已知行为的测试先行 -> `tdd-workflow`。
-- 原始 CSV/Excel/JSONL/TXT 或 pandas 数据处理 -> `data-processing`。
-- BERT、文本匹配、Cross-Encoder、hard negative、训练/评估 -> `nlp-modeling`。
-- Docker、服务、日志、健康检查、部署/服务器运维 -> `deploy-ops`。
-- GitHub 平台对象 -> `gh-ops`。
-- 长期技术记忆 -> `memory`。
-- 非技术日常记忆 -> `daily-memory`。
-
-provider/auth/model/API key 属于高风险边界。不要提交或发布真实 API key。
-
-### 必要 Skills
-
-| Skill | 使用场景 | 安全说明 |
-| --- | --- | --- |
-| `customize-opencode` | opencode 配置、`AGENTS.md`、plugins、MCP、权限 schema | 修改配置加载期文件后需要重启 opencode。 |
-| `opencode-agent-designer` | 创建、修改或审计 agent | 不用于 provider/auth/model 工作。 |
-| `opencode-skill-designer` | skills 目录扫描、审计、注册、路由、重叠治理 | 不用于创建单个具体 skill。 |
-| `opencode-model-provider` | provider/auth/model/API key/能力/variant 工作 | 需要明确确认；不得暴露真实 key。 |
-| `skill-creator` | 创建或更新单个 skill | 能收窄已有 skill 时，不创建重叠 skill。 |
-| `skill-installer` | 从给定 repo/path/URL 安装 skill | 使用下载/API 方法；不操作 `.git`。 |
-| `diagnose` | 根因未知、行为异常、测试失败、异常、flaky、回归 | 先复现和取证，再修复。 |
-| `tdd-workflow` | 测试先行、已知行为或 red-green-refactor | 根因未知时先用 `diagnose`。 |
-| `data-processing` | 原始数据清洗、转换、采样、切分、标签、pandas | 用户数据按敏感信息处理。 |
-| `nlp-modeling` | NLP 建模、BERT、文本匹配、Cross-Encoder、训练/评估 | 原始表格清洗不使用它，除非服务训练设计。 |
-| `codebase-architecture` | 既有架构、模块边界、耦合、重构/可测试性分析 | 架构分析不等于授权大范围重构。 |
-| `design-grill` | 压测 PRD、计划、设计、功能想法、模糊需求 | 一次只问一个关键问题。 |
-| `deploy-ops` | Docker、服务日志、健康检查、部署配置、服务器操作 | 生产/部署变更需要确认。 |
-| `gh-ops` | GitHub issue、PR、release、triage、仓库搜索 | GitHub 写操作需确认；不碰 `.git`。 |
-| `prototype` | 抛弃式原型、UI mock、状态机 sandbox、快速实验 | 不用于生产实现。 |
-| `handoff` | 给其他 agent 或未来会话压缩当前状态 | 需要脱敏；不是长期记忆。 |
-| `memory` | 长期技术决策、项目状态、偏好、已确认根因 | 隐私敏感；只保存有价值且非敏感上下文。 |
-| `daily-memory` | 非技术日常、想法感受、人际关系、健康、家庭 | 隐私敏感；不要用于代码/项目记忆。 |
-
-### Skill 路由说明
-
-- skills 按任务对象和领域匹配触发，不按上下文长度、笼统复杂度或自动模式触发。
-- 复杂任务仍要匹配具体对象：诊断、TDD、数据、建模、部署、GitHub、架构、设计、原型、交接、记忆或日常记忆。
-- provider/auth/API key 工作需要明确确认，且不得发布真实 key。
-- GitHub 写操作需要明确确认，且不得操作 `.git`。
-- 部署和生产/服务操作需要明确确认。
-- `memory` 和 `daily-memory` 都是隐私敏感能力，必须分开使用。
+- opencode 自治：`customize-opencode` / `opencode-agent-designer` / `opencode-skill-designer` / `opencode-model-provider` / `skill-creator` / `skill-installer`
+- 工程方法：`design-grill` / `codebase-architecture` / `diagnose` / `tdd-workflow` / `prototype` / `handoff` / `memory` / `daily-memory`
+- NLP / 数据 / 部署 / GitHub：`nlp-modeling` / `data-processing` / `deploy-ops` / `gh-ops`
 
 ### 安全边界
 
-这套配置默认保守：
-
-- 不操作 `.git`。
-- 未明确确认，不删除、移动、重命名或破坏性迁移用户数据。
-- 不做文件层回滚，不用旧 snapshot 覆盖当前文件。
-- 不启动持久后台服务。
-- 未确认，不修改生产服务、部署状态、provider/auth/model/API key、MCP/plugin 高风险配置或 GitHub 对象。
-- 未明确允许，不运行 format、fix、snapshot、golden、fixture 更新或其他会写入的验证命令。
-- 不提交真实 API key、私有 memory、私有 daily-memory 数据、secrets、tokens 或本地私有配置。
+- 不操作 `.git`（硬性禁令，零例外）。
+- 未确认不删除/迁移用户数据，不文件层回滚，不用旧 snapshot 覆盖当前文件。
+- 未确认不动生产服务、部署、`provider/auth/model/API Key`、MCP/plugin 高风险变更、GitHub 写操作。
+- 不通过 shell launcher（`cmd / powershell / pwsh / bash / sh`）、串联管道、重定向、`python -c`、`node -e`、`Invoke-Expression` 绕过权限。
+- 未明确允许，不运行 `--fix` / `--write` / `--snapshot-update` / format / golden / fixture 更新等会写入的命令。
+- 不提交真实 API key、私有 memory、secrets、tokens。
 
 ### 质量门禁
 
-验证层级：
+- L0：语法、配置格式、frontmatter、Markdown 结构、静态可读性。
+- L1：相关单测、lint、typecheck、最小样本验证。
+- L2：功能路径、关键调用链、回归路径。
+- L3：UI/E2E、训练 dry-run、部署 dry-run、服务健康检查。
 
-- L0：语法、导入、配置格式、frontmatter、Markdown 结构、代码块闭合、锚点可读性和静态可读性。
-- L1：相关单测、lint、typecheck、最小脚本或最小样本验证。
-- L2：功能路径、集成路径、关键调用链、数据流或回归路径验证。
-- L3：UI/E2E、训练 dry-run、部署 dry-run、服务健康检查或专项验证。
-
-失败回环：
-
-1. 分类失败。
-2. 只在批准边界内修复。
-3. 基于当前文件状态重新验证。
-4. 三轮修复/验证失败后停止，报告证据、阻塞、残余风险和建议接手对象。
+除 L0 例外，正式文件修改必须 `build` → `qa` → `code-reviewer` → 交付。QA 和 code-reviewer 必须独立读最新文件并给证据，不复用 build 结论。未覆盖写 NOT_COVERED；环境/权限不足写 BLOCKED；**不得伪造 PASS**。里程碑内 `build` 自测（L0/L1）即可推进，里程碑边界批量上 `qa` + `code-reviewer`——这是摊销，不是降门禁。
 
 ### 使用方法
-
-#### 1. 保持预期结构
-
-```text
-opencode.jsonc
-AGENTS.md
-agents/
-  *.md
-skills/
-  */SKILL.md
-```
-
-#### 2. 复制到 opencode 配置目录
 
 ```bash
 mkdir -p ~/.config/opencode
@@ -718,33 +355,34 @@ cp -R agents ~/.config/opencode/agents
 cp -R skills ~/.config/opencode/skills
 ```
 
-Windows 下复制到当前用户的 opencode 配置目录即可。
-
-#### 3. 最小 `opencode.jsonc`
+Windows 复制到 `%USERPROFILE%\.config\opencode\` 即可。下面是最小可用子集；完整 deny 矩阵见仓库根 `opencode.jsonc`。
 
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
   "snapshot": false,
   "default_agent": "auto-flash",
-  "instructions": [
-    "AGENTS.md"
-  ],
-  "skills": {
-    "paths": [
-      "~/.config/opencode/skills"
-    ]
-  },
-  "agent": {
-    "plan": {
-      "disable": true
+  "instructions": ["AGENTS.md"],
+  "skills": { "paths": ["~/.config/opencode/skills"] },
+  "agent": { "plan": { "disable": true } },
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "cmd": "deny", "cmd.exe": "deny",
+      "powershell": "deny", "powershell.exe": "deny",
+      "pwsh": "deny", "bash": "deny", "sh": "deny",
+      "python -c *": "deny", "node -e *": "deny",
+      "Invoke-Expression *": "deny", "iex *": "deny",
+      "git *": "deny", "git.exe *": "deny",
+      "rm *": "deny", "del *": "deny", "Remove-Item *": "deny", "Rename-Item *": "deny",
+      "*;*": "deny", "*&&*": "deny", "*|*": "deny", "*>*": "deny",
+      "*$(*": "deny", "*`*": "deny",
+      "*--fix": "deny", "*--write*": "deny", "*--snapshot-update*": "deny", "ruff format*": "deny"
     }
-  },
-  "mcp": {},
-  "provider": {}
+  }
 }
 ```
 
-#### 4. 重启 opencode
+完整版（含全部 deny/ask/allow 矩阵）见仓库根目录 `opencode.jsonc`。`agent.plan.disable=true` 仅禁用 opencode 内置 plan agent，不影响 `decision-planner`。
 
-opencode 在启动时加载配置、agents、skills 和 instructions。修改 `opencode.jsonc`、`AGENTS.md`、`agents/` 下文件或任意 `SKILL.md` 后，需要退出并重启 opencode。当前运行中的会话不会热加载这些规则。
+修改 `opencode.jsonc` / `AGENTS.md` / `agents/` / `SKILL.md` 后**必须重启 opencode**，运行中的会话不会热加载。
